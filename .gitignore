@@ -1,0 +1,31 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+build/
+devel/
+dist/
+*.egg-info/
+
+# PyTorch, Weights, and Caches
+*.pt
+*.bin
+*.safetensors
+.cache/
+.huggingface/
+
+# Inspect AI Logs & Cache
+.inspect/
+*.eval
+*.log
+
+# Testing & IDEs
+.pytest_cache/
+.coverage
+.vscode/
+.idea/
+
+scratch/
