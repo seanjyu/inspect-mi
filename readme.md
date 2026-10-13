@@ -1,4 +1,4 @@
-# Inspect AI Mechanistic Interpretability
+# inspect-mi
 A Mechanistic Interpretability (MI) execution framework and context manager for Inspect AI that bridges low-level neural activation hooks (nnterp / PyTorch) with high-level evaluation loops. 
 
 ## Key Features
@@ -13,7 +13,7 @@ A Mechanistic Interpretability (MI) execution framework and context manager for 
 ## Install
 1. Clone this repo 
 ``` bash
-git clone 
+git clone https://github.com/seanjyu/inspect-mi
 ```
 OPTIONAL - Create and activate python virtual environment
 ```bash
