@@ -32,7 +32,8 @@ pip install -e ".[dev]"
 
 ## Quickstart
 
-The following example demonstrates how to set up an activation steering and telemetry pipeline using `inspect_mi` inside an Inspect AI evaluation. A more in depth example can be found here
+The following example demonstrates how to set up an activation steering and telemetry pipeline using `inspect_mi` inside an Inspect AI evaluation. 
+<!-- A more in depth example can be found here -->
 
 ### 1. Define Target Layers and Intervention Config
 
