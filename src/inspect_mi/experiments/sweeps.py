@@ -1,5 +1,3 @@
-# src/inspect_mi/experiments/sweeps.py
-
 from collections.abc import Callable, Sequence
 
 from inspect_ai import Task

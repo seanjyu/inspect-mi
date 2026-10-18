@@ -67,16 +67,6 @@ class TargetSpec(BaseModel):
             raise ValueError("token_slice must be set when token_policy is 'slice'")
         return self
 
-
-# @dataclass
-# class InterventionConfig:
-#     """Configures a homogeneous evaluation run (e.g. steering or probing)."""
-
-#     method_type: str
-#     targets: List[TargetSpec]
-#     params: Dict[str, Any] = field(default_factory=dict)
-
-
 @dataclass
 class InterventionConfig:
     targets: list[TargetSpec]
