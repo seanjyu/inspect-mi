@@ -2,11 +2,18 @@
 A Mechanistic Interpretability (MI) execution framework and context manager for Inspect AI that bridges low-level neural activation hooks (nnterp / PyTorch) with high-level evaluation loops. 
 
 ## Key Features
-- Surgical Activation Steering & Mutation: Perform in-flight hidden state interventions ($act \to act - \alpha \cdot v$) during model forward passes (model.trace()), enabling real-time causal steering, ablation, and representation editing while measuring downstream logit and probability shifts.
-- Thread & Async-Safe Context Isolation: Leverage ContextVar-backed state containers (MIContext) to guarantee strict, zero-leak isolation of mutators, observers, and telemetry buffers across concurrent asyncio evaluation loops and multi-threaded (ThreadPoolExecutor) worker pools.
-- Native Inspect AI Solver Adapter: Provide high-order solver integrations (intervene()) that transparently wrap model generation calls (generate()), manage lifecycle hook bindings, and handle automatic context teardown on completion or error.
-- Declarative Target & Schema Specification: Standardize layer targeting (TargetSpec, InterventionConfig) across heterogeneous LLM architectures (e.g., GPT-2, LLaMA, Qwen, Mistral), mapping unified layer specs (location="mlp_out") to concrete PyTorch module paths.
+- Activation Steering & Mutation: Perform in-flight hidden state interventions ($act \to act - \alpha \cdot v$) during model forward passes (model.trace()), enabling causal steering, ablation, and representation editing while measuring downstream logit and probability shifts.
+- Thread & Async-Safe Context Isolation: Leverage ContextVar-backed state containers (MIContext) to isolate per-sample state (mutators, observers, telemetry), concurrent model execution is serialised (see [roadmap](docs/roadmap.md)).
+- Native Inspect AI Solver Adapter: Provide high-order solver integrations (intervene()) that wrap model generation calls (generate()), manage lifecycle hook bindings, and handle automatic context teardown on completion or error.
+- Declarative Target & Schema Specification: Standardize layer targeting (TargetSpec, InterventionConfig) across nnterp supported architectures, mapping unified layer specs (location="mlp_out") to concrete PyTorch module paths.
 - JSON-Safe Telemetry & Store Export: Automatically convert internal activation tensors, vector norms, and scalar metrics into JSON-serializable primitives, flushing captured telemetry directly into Inspect AI’s TaskState.store under the structured mi:* namespace for downstream log analysis.
+
+## Work In Progress Notice
+This framework is still work in progress, more details regarding the current progress and technical challenges can be found [here](docs/roadmap.md#current-challenges)
+
+## Documentation
+Further details regarding the software architecture can be found [here](docs/architecture.md).
+
 
 ## System Requirements
 - Python 3.12 or higher
@@ -35,112 +42,71 @@ pip install -e ".[dev]"
 The following example demonstrates how to set up an activation steering and telemetry pipeline using `inspect_mi` inside an Inspect AI evaluation. 
 <!-- A more in depth example can be found here -->
 
-### 1. Define Target Layers and Intervention Config
-
-Specify where in the model architecture you want to intercept hidden states using `TargetSpec` and `InterventionConfig`.
+### 1. Define Target Layers & Config 
+You can declare target layers and configuration specs using TargetSpec and InterventionConfig:
 
 ```python
 from inspect_mi import InterventionConfig, TargetSpec
 
-# Target the MLP output at layer 0
 config = InterventionConfig(
     targets=[TargetSpec(layer=0, location="mlp_out", module_path="layers.0.mlp")]
 )
 ```
 
 ### 2. Define Mutator or Observer Factories
-
-Choose whether you want to **mutate** activations (e.g., active vector steering or ablation) or **observe** them (e.g., passive linear probing or feature logging).
-
+Choose whether you want to mutate activations (e.g., active vector steering) or observe them (e.g., passive tracking of hidden state norms):
 ```python
-import torch
 from inspect_mi import TargetSpec
 
 
-# Mutator: Subtracts a target concept vector during model forward passes
-def steering_mutator_factory(scale: float = 2.0):
-    steering_vec = torch.ones(768)  # Replace with your concept/direction vector
+# Mutator factory: returns a function that computes act - scale * v
+def steering_mutator_factory(scale: float = 50.0, vector: torch.Tensor = None):
+    def factory(spec: TargetSpec):
+        def mutator(act: torch.Tensor, s: TargetSpec) -> torch.Tensor:
+            return act - scale * vector.to(act.device, act.dtype)
 
-    def mutator(act: torch.Tensor, spec: TargetSpec) -> torch.Tensor:
-        return act - (scale * steering_vec.to(act.device))
+        return mutator
 
-    return mutator
-
-
-# Observer: Passive tracking of hidden state norm into the MI telemetry buffer
-def norm_observer_factory():
-    def observer(act: torch.Tensor, spec: TargetSpec, ctx):
-        ctx.store(f"act_norm_layer_{spec.layer}", act.norm().item())
-
-    return observer
+    return factory
 ```
 
-### 3. Build the Inspect AI Task with the `intervene` Solver
+### 3. Build the Inspect AI Task with the intervene Solver
+Wrap your evaluation pipeline using inspect_mi’s intervene() solver. (Note: intervene handles execution internally, so separate generation wrappers are not required).
 
-Wrap your generation solver pipeline using `inspect_mi`’s `intervene()` solver function inside your Inspect AI task definition.
-
-```python
+```Python
 from inspect_ai import Task, task, eval as inspect_eval
 from inspect_ai.dataset import MemoryDataset, Sample
-from inspect_ai.solver import generate
 from inspect_mi import intervene
 
 
 @task
 def mi_steering_eval() -> Task:
-    # Instantiate the MI solver wrapper
     mi_solver = intervene(
         config=config,
-        mutator_factory=steering_mutator_factory(scale=2.0),
-        observer_factory=norm_observer_factory(),
+        mutator_factory=steering_mutator_factory(scale=50.0, vector=my_vector),
     )
 
     dataset = MemoryDataset(
-        [Sample(input="Explain the concept of neural network interpretability.")]
+        [Sample(input="The quick brown fox jumps over the lazy dog")]
     )
 
     return Task(
         dataset=dataset,
-        plan=[
-            mi_solver,  # Binds thread/async MIContext and activates hooks
-            generate(),  # Performs generation with active interventions
-        ],
+        solver=mi_solver,  # Binds per-sample state and executes interventions
     )
 
 
 if __name__ == "__main__":
-    inspect_eval(mi_steering_eval(), model="hf/gpt2")
+    inspect_eval(mi_steering_eval(), model="NNTERP_MODEL")
 ```
 
-### 4. Execute the Evaluation
+### 4. Inspect Telemetry & Logit Shift Metrics 
+All telemetry and activation metrics logged during execution are automatically flushed to TaskState.store under the mi:* key namespace. You can inspect these in the Inspect AI log viewer (inspect view) or read them directly from evaluation logs.
 
-Execute the evaluation script via Python CLI or using the native Inspect AI CLI:
+## Runnable Example
+This project is still very much work in progress but a runnable example can be found [here](docs/example/smoke_test.py). It uses a custom solver (rather than inspect_mi's intervene method).
 
-```bash
-python your_mi_task.py
 
-```
-
-Or using Inspect CLI:
-
-```bash
-inspect eval your_mi_task.py --model hf/gpt2
-
-```
-
-### 5. Inspect Telemetry & Activation Metrics
-
-All metrics and telemetry logged during execution are automatically flushed to `TaskState.store` under the `mi:*` key namespace. You can inspect these in the Inspect AI log viewer (`inspect view`) or read them directly from the evaluation log files:
-
-```json
-{
-  "store": {
-    "mi:act_norm_layer_0": 14.8231,
-    "mi:intervention_status": "success"
-  }
-}
-
-```
 <!-- ## Documentation and Testing
 - Further details regarding the architecture can be found [here](docs/architecture.md)
 - Testing for this framework was done through pytest, more details can be found [here](tests/testing.md)
