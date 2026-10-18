@@ -186,26 +186,3 @@ def test_nnterp_tuple_output_container_handling(nnterp_gpt2_model, input_ids):
 
     assert len(observed_activations) == 1
     assert observed_activations[0].shape == (2, 4, 32)
-
-
-# def test_nnterp_llama_path_resolution(nnterp_llama_model, input_activations):
-#     """Verifies path resolution for Llama submodules under nnterp tracing."""
-#     captured_attn = []
-#     captured_mlp = []
-
-#     attn_path = "model.layers.0.self_attn"
-#     mlp_path = "model.layers.0.mlp"
-
-#     ctx = MIContext(sample_id="nnterp_llama_test")
-#     ctx.targets[attn_path] = TargetSpec(layer=0, location="self_attn", module_path=attn_path)
-#     ctx.targets[mlp_path] = TargetSpec(layer=0, location="mlp", module_path=mlp_path)
-
-#     ctx.observers[attn_path] = lambda act, spec: captured_attn.append(act.detach().clone())
-#     ctx.observers[mlp_path] = lambda act, spec: captured_mlp.append(act.detach().clone())
-
-#     with bind_context(ctx):
-#         with nnterp_llama_model.trace(input_activations):
-#             apply_nnterp_hooks(nnterp_llama_model)
-
-#     assert len(captured_attn) == 1
-#     assert len(captured_mlp) == 1
